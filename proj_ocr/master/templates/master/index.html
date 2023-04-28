@@ -1,0 +1,153 @@
+{% include 'base.html' %}
+{% load static %}
+{% block extra_css %}
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/css-loader/3.3.3/loader-curtain.css" integrity="sha512-ayfj4nS+y/LTvBb/gbOL00DU8lnMjAnEe4UqZ1fj+XTE5K4HExHPypnza6l6Zl12jRfmZPCTIre4yTNI26ki5g==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+<style>
+
+body {
+    background-image: url('{% static "assets/image/cool.png" %}');
+    /* background-position: center; */
+    background-size: cover;
+}
+
+
+    /* Glassmorphism card effect */
+.card {
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    background-color: rgba(255, 255, 255, 0.75);
+    border-radius: 12px;
+    border: 1px solid rgba(209, 213, 219, 0.3);
+}
+</style>
+
+{% endblock extra_css %}
+{% block content %}
+<div class="loader loader-curtain " data-curtain-text="Processing" data-colorful ></div>
+    <div class="container my-5">
+        
+        <div class="row justify-content-center">
+            <div class="col-12">
+                <div class="card  ">
+                    <div class="card-header bg-transparent">
+                        <h1 class="card-title text-center">
+                            Optical Character Recognition
+                        </h1>
+                    </div>
+                    <div class="card-body" id="main_content">
+                        <form class="row g-3 needs-validation" novalidate action="{% url 'master_file_processing' %}" method="POST" enctype="multipart/form-data" id="ocr_form">
+                            <div class="col-12" >
+                                <label for="formFile" class="form-label fs-3 fw-bolder ">Upload File</label>
+                                <input class="form-control my-2" type="file" id="formFile" required name="ocr_image">
+                                <div id="formFile" class="invalid-feedback">
+                                    Please provide a valid image file.
+                                  </div>
+                            </div>
+                            <div class="col-12 ">
+                                <button class="btn btn-outline-success fs-4" type="submit" id="ocr_form_submit_btn">Process File</button>
+                            </div>
+                        </form>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+{% endblock %}
+
+
+{% block extra_js %}
+
+
+    <script>
+(function () {
+  'use strict'
+  var forms = document.querySelectorAll('.needs-validation')
+
+  // Loop over them and prevent submission
+  Array.prototype.slice.call(forms)
+    .forEach(function (form) {
+      form.addEventListener('submit', function (event) {
+        if (!form.checkValidity()) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+
+        form.classList.add('was-validated')
+      }, false)
+    })
+})()
+</script>
+
+<script>
+    $(function(){
+        $("button#ocr_form_submit_btn").on("click", function(event){
+            event.preventDefault();
+            event.stopPropagation();
+            var submit_form = $("form#ocr_form").get(0);
+            if(submit_form.checkValidity()){
+                var size = parseFloat($("#formFile").get(0).files[0].size / (1024*1024)).toFixed(2);
+                var extension = $("#formFile").get(0).files[0].type;
+                console.debug(extension);   
+                if(size > 2){
+                    var error = `<div class="alert alert-danger alert-dismissible fade show" role="alert">File size is greater than 2MB. Please try to upload an image with size smaller than 2MB.<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>`;
+                    $(error).insertAfter("nav");
+                }
+                else if(  ["image/jpeg", "image/png"].indexOf(extension) == -1 ){
+                    var error = `<div class="alert alert-danger alert-dismissible fade show" role="alert">Invalid file is uploaded. Only JPEG, JPG or PNG type files are allowed.<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>`;
+                    $(error).insertAfter("nav");
+                }
+                else{
+                    var fd = new FormData($("form#ocr_form")[0]);
+                    // console.debug($("form#ocr_form")[0]);
+                    $("div.loader-curtain").addClass("is-active");
+                    $.ajaxSetup({
+                        beforeSend: function(xhr, settings){
+                            xhr.setRequestHeader(
+                                'X-CSRFToken', '{{ csrf_token }}'
+                            )
+                        }
+                    });
+                    $.ajax({
+                        url : $(submit_form).attr("action"),
+                        type  : "POST",
+                        data: fd,
+                        processData: false,
+                        contentType: false,
+                        success : function(response){
+                            $("div.loader-curtain").removeClass("is-active");
+                            var error = `<div class="alert alert-success alert-dismissible fade show" role="alert">File Processing Completed Successfully.<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>`;
+                            $(error).insertAfter("nav");
+
+                            success_template = `                        <div class="row justify-content-center">
+                            <div class="col-12 col-md-6">
+                                <img src="${response["url"]}" alt="" class="img-fluid">
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <p class="card-text">
+                                    ${response["text"]}
+                                </p>
+                            </div>
+                            <div class="col-12 text-end"><a href="{% url 'master_index' %}" class="btn btn-primary mx-auto fs-4 my-3">Reset Form</a></div>
+                        </div>`;
+                        $("div#main_content").html(success_template);
+                        },
+                        error : function(response){
+                            $("div.loader-curtain").removeClass("is-active");
+                            var error = `<div class="alert alert-danger alert-dismissible fade show" role="alert">${response["responseJSON"]["error"]}<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>`;
+                            $(error).insertAfter("nav");
+                        }
+                    });
+                }
+                $(submit_form).removeClass("was-validated");
+            }
+            else{
+                $(submit_form).addClass("was-validated");
+            }
+        });
+    });
+</script>
+{% endblock extra_js %}
